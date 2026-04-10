@@ -24,11 +24,12 @@ fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 NAMESPACE="${2:-automotive-builds}"
-CR_NAME=$(kubectl apply -f "${CR_FILE}" -n "${NAMESPACE}" --dry-run=client -o jsonpath='{.metadata.name}')
 PIPELINE_START=$(date +%s)
 
 echo "=== Reapplying CRDs ==="
 cd "${ROOT_DIR}" && make install
+
+CR_NAME=$(grep -m1 '^\s*name:' "${CR_FILE}" | awk '{print $2}')
 
 echo "=== Cleaning up previous run of '${CR_NAME}' ==="
 kubectl delete softwarebuild "${CR_NAME}" -n "${NAMESPACE}" --ignore-not-found
