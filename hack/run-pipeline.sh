@@ -52,7 +52,7 @@ kubectl apply -f "${CR_FILE}" -n "${NAMESPACE}"
 echo "=== Waiting for PipelineRun to be created ==="
 for i in $(seq 1 30); do
   RUN=$(kubectl get softwarebuild "${CR_NAME}" -n "${NAMESPACE}" \
-    -o jsonpath='{.status.currentPipelineRun}' 2>/dev/null || true)
+    -o jsonpath='{.status.pipelineRunName}' 2>/dev/null || true)
   if [[ -n "${RUN}" ]]; then
     break
   fi
