@@ -100,24 +100,8 @@ if [[ "${LOCAL_MODE}" == "true" ]]; then
   WORKSPACE_NAME="$(basename "${HOST_WORKSPACE}")"
   PVC_NAME="${WORKSPACE_NAME}-workspace"
 
-  echo "=== Creating PV/PVC '${PVC_NAME}' ==="
+  echo "=== Creating writable PVC '${PVC_NAME}' ==="
   kubectl apply -f - <<EOF
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: ${PVC_NAME}-pv
-spec:
-  capacity:
-    storage: 5Gi
-  accessModes:
-    - ReadWriteOnce
-  hostPath:
-    path: /host-workspace
-  storageClassName: manual
-  claimRef:
-    namespace: ${NAMESPACE}
-    name: ${PVC_NAME}
----
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -126,18 +110,49 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: manual
   resources:
     requests:
       storage: 5Gi
 EOF
 
+  echo "=== Populating PVC from host workspace ==="
+  kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pvc-populator
+  namespace: ${NAMESPACE}
+spec:
+  restartPolicy: Never
+  containers:
+    - name: copy
+      image: busybox
+      command: ["sh", "-c", "cp -a /src/. /dest/ && echo 'Copy complete'"]
+      volumeMounts:
+        - name: host-src
+          mountPath: /src
+          readOnly: true
+        - name: workspace
+          mountPath: /dest
+  volumes:
+    - name: host-src
+      hostPath:
+        path: /host-workspace
+    - name: workspace
+      persistentVolumeClaim:
+        claimName: ${PVC_NAME}
+EOF
+
+  echo "Waiting for copy to complete..."
+  kubectl wait --for=condition=Ready pod/pvc-populator -n "${NAMESPACE}" --timeout=120s 2>/dev/null || true
+  kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/pvc-populator -n "${NAMESPACE}" --timeout=300s
+  kubectl delete pod pvc-populator -n "${NAMESPACE}"
+
   echo ""
   echo "Cluster ready (local mode). Run:"
   echo "  ./hack/run-pipeline.sh <overlay-dir-or-cr.yaml>"
   echo ""
-  echo "Local workspace: ${HOST_WORKSPACE} -> /host-workspace (Kind node)"
-  echo "PVC:             ${PVC_NAME} (namespace: ${NAMESPACE})"
+  echo "Local workspace: ${HOST_WORKSPACE} -> copied into PVC '${PVC_NAME}'"
   echo "Image:           ${LOCAL_IMAGE}"
 else
   echo ""
