@@ -1,12 +1,48 @@
 #!/usr/bin/env bash
 # One-time setup: creates a Kind cluster with Tekton and installs CRDs.
-# After this, use hack/run-pipeline.sh <cr.yaml> to run builds.
+# After this, use hack/run-pipeline.sh to run builds.
+#
+# Usage:
+#   ./hack/setup-cluster.sh                          # basic cluster
+#   ./hack/setup-cluster.sh --local /path/to/workspace my-image:tag
+#
+# The --local flag sets up the cluster for local development:
+#   - Mounts the host workspace directory into the Kind node
+#   - Creates a PVC backed by the mounted directory
+#   - Loads the specified container image into Kind
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLUSTER_NAME="automotive-dev"
 TEKTON_VERSION="v1.9.1"
 NAMESPACE="automotive-builds"
+LOCAL_MODE=false
+HOST_WORKSPACE=""
+LOCAL_IMAGE=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --local)
+      LOCAL_MODE=true
+      HOST_WORKSPACE="${2:?--local requires <workspace-dir> <image> arguments}"
+      LOCAL_IMAGE="${3:?--local requires <workspace-dir> <image> arguments}"
+      shift 3
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      echo "Usage: $0 [--local <workspace-dir> <image>]" >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [[ "${LOCAL_MODE}" == "true" ]]; then
+  if [[ ! -d "${HOST_WORKSPACE}" ]]; then
+    echo "Workspace directory not found: ${HOST_WORKSPACE}" >&2
+    exit 1
+  fi
+  HOST_WORKSPACE="$(cd "${HOST_WORKSPACE}" && pwd)"
+fi
 
 for bin in docker kind kubectl; do
   command -v "$bin" >/dev/null 2>&1 || {
@@ -17,7 +53,21 @@ done
 
 echo "=== Creating Kind cluster '${CLUSTER_NAME}' ==="
 kind delete cluster --name "${CLUSTER_NAME}" 2>/dev/null || true
-kind create cluster --name "${CLUSTER_NAME}" --wait 5m
+
+if [[ "${LOCAL_MODE}" == "true" ]]; then
+  kind create cluster --name "${CLUSTER_NAME}" --wait 5m --config - <<EOF
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    extraMounts:
+      - hostPath: ${HOST_WORKSPACE}
+        containerPath: /host-workspace
+        readOnly: true
+EOF
+else
+  kind create cluster --name "${CLUSTER_NAME}" --wait 5m
+fi
 
 echo "=== Installing Tekton Pipelines ${TEKTON_VERSION} ==="
 kubectl apply --filename \
@@ -43,6 +93,54 @@ spec:
     enabled: true
 EOF
 
-echo ""
-echo "Cluster ready. Run:"
-echo "  ./hack/run-pipeline.sh <path-to-softwarebuild-cr.yaml>"
+if [[ "${LOCAL_MODE}" == "true" ]]; then
+  echo "=== Loading image '${LOCAL_IMAGE}' into Kind ==="
+  kind load docker-image "${LOCAL_IMAGE}" --name "${CLUSTER_NAME}"
+
+  WORKSPACE_NAME="$(basename "${HOST_WORKSPACE}")"
+  PVC_NAME="${WORKSPACE_NAME}-workspace"
+
+  echo "=== Creating PV/PVC '${PVC_NAME}' ==="
+  kubectl apply -f - <<EOF
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: ${PVC_NAME}-pv
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /host-workspace
+  storageClassName: manual
+  claimRef:
+    namespace: ${NAMESPACE}
+    name: ${PVC_NAME}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ${PVC_NAME}
+  namespace: ${NAMESPACE}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: manual
+  resources:
+    requests:
+      storage: 5Gi
+EOF
+
+  echo ""
+  echo "Cluster ready (local mode). Run:"
+  echo "  ./hack/run-pipeline.sh <overlay-dir-or-cr.yaml>"
+  echo ""
+  echo "Local workspace: ${HOST_WORKSPACE} -> /host-workspace (Kind node)"
+  echo "PVC:             ${PVC_NAME} (namespace: ${NAMESPACE})"
+  echo "Image:           ${LOCAL_IMAGE}"
+else
+  echo ""
+  echo "Cluster ready. Run:"
+  echo "  ./hack/run-pipeline.sh <path-to-softwarebuild-cr.yaml>"
+fi
