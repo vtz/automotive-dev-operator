@@ -452,6 +452,59 @@ type SoftwareBuildsConfig struct {
 	DefaultImage string `json:"defaultImage,omitempty"`
 }
 
+// DefaultSyftImage is the default Syft container image for SBOM generation
+const DefaultSyftImage = "docker.io/anchore/syft:v1.22.0"
+
+// DefaultSBOMFormat is the default SBOM output format
+const DefaultSBOMFormat = "spdx-json"
+
+// ComplianceConfig configures supply-chain compliance features (SBOM, signing, policy).
+// When Enabled, the operator appends an sbom-generate task to every build pipeline
+// and populates ArtifactRef in the build status.
+type ComplianceConfig struct {
+	// Enabled activates supply-chain compliance for build pipelines
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// SBOMFormat is the SBOM output format (spdx-json or cyclonedx-json)
+	// +kubebuilder:validation:Enum="spdx-json";"cyclonedx-json"
+	// +kubebuilder:default="spdx-json"
+	// +optional
+	SBOMFormat string `json:"sbomFormat,omitempty"`
+
+	// SyftImage is the container image for SBOM generation (Syft)
+	// +optional
+	SyftImage string `json:"syftImage,omitempty"`
+
+	// ECPolicyRef references an Enterprise Contract policy for optional gate enforcement
+	// +optional
+	ECPolicyRef string `json:"ecPolicyRef,omitempty"`
+
+	// RekorURL is the Rekor transparency log URL for Tekton Chains configuration
+	// +optional
+	RekorURL string `json:"rekorURL,omitempty"`
+
+	// FulcioURL is the Fulcio CA URL for keyless signing via Tekton Chains
+	// +optional
+	FulcioURL string `json:"fulcioURL,omitempty"`
+}
+
+// GetSBOMFormat returns the SBOM format, falling back to the default
+func (c *ComplianceConfig) GetSBOMFormat() string {
+	if c != nil && c.SBOMFormat != "" {
+		return c.SBOMFormat
+	}
+	return DefaultSBOMFormat
+}
+
+// GetSyftImage returns the Syft image, falling back to the default
+func (c *ComplianceConfig) GetSyftImage() string {
+	if c != nil && c.SyftImage != "" {
+		return c.SyftImage
+	}
+	return DefaultSyftImage
+}
+
 // OperatorConfigSpec defines the desired state of OperatorConfig
 type OperatorConfigSpec struct {
 	// OSBuilds defines the configuration for OS build operations
@@ -483,6 +536,12 @@ type OperatorConfigSpec struct {
 	// build software for arbitrary target OSes using user-specified container images.
 	// +optional
 	SoftwareBuilds *SoftwareBuildsConfig `json:"softwareBuilds,omitempty"`
+
+	// Compliance configures supply-chain compliance features (SBOM generation,
+	// signing endpoints, policy enforcement). When enabled, build pipelines
+	// gain SBOM generation and emit results for Tekton Chains.
+	// +optional
+	Compliance *ComplianceConfig `json:"compliance,omitempty"`
 }
 
 // OSBuildsConfig defines configuration for OS build operations
