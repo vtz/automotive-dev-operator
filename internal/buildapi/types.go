@@ -430,3 +430,69 @@ type SealedListItem struct {
 	CreatedAt      string `json:"createdAt"`
 	CompletionTime string `json:"completionTime,omitempty"`
 }
+
+// SoftwareBuildRunRequest is the payload to trigger a software build via the REST API.
+type SoftwareBuildRunRequest struct {
+	// Revision overrides the git revision from the CR spec (remote mode only)
+	Revision string `json:"revision,omitempty"`
+	// LocalWorkspace references a pre-synced PVC for local builds
+	LocalWorkspace string `json:"localWorkspace,omitempty"`
+	// Image overrides the runtime image (useful for local dev containers)
+	Image string `json:"image,omitempty"`
+	// SkipCompliance disables SBOM/signing/EC for this run
+	SkipCompliance bool `json:"skipCompliance,omitempty"`
+}
+
+// SoftwareBuildSourceSummary is a summary of the SoftwareBuild source configuration.
+type SoftwareBuildSourceSummary struct {
+	Type     string `json:"type"`
+	URL      string `json:"url,omitempty"`
+	Revision string `json:"revision,omitempty"`
+}
+
+// SoftwareBuildRuntimeSummary is a summary of the SoftwareBuild runtime configuration.
+type SoftwareBuildRuntimeSummary struct {
+	Image string `json:"image"`
+}
+
+// SoftwareBuildStageStatusAPI captures per-stage progress for the API response.
+type SoftwareBuildStageStatusAPI struct {
+	Name    string `json:"name"`
+	State   string `json:"state,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+// SoftwareBuildComplianceSummary summarizes compliance state for a build.
+type SoftwareBuildComplianceSummary struct {
+	Enabled       bool   `json:"enabled"`
+	SBOMRef       string `json:"sbomRef,omitempty"`
+	SignatureRef  string `json:"signatureRef,omitempty"`
+	ProvenanceRef string `json:"provenanceRef,omitempty"`
+	PolicyResult  string `json:"policyResult,omitempty"`
+}
+
+// SoftwareBuildResponse is returned by GET and POST software build operations.
+type SoftwareBuildResponse struct {
+	Name            string                          `json:"name"`
+	Phase           string                          `json:"phase"`
+	Message         string                          `json:"message"`
+	RequestedBy     string                          `json:"requestedBy,omitempty"`
+	StartTime       string                          `json:"startTime,omitempty"`
+	CompletionTime  string                          `json:"completionTime,omitempty"`
+	PipelineRunName string                          `json:"pipelineRunName,omitempty"`
+	ArtifactURI     string                          `json:"artifactURI,omitempty"`
+	FailureReason   string                          `json:"failureReason,omitempty"`
+	Source          *SoftwareBuildSourceSummary      `json:"source,omitempty"`
+	Runtime         *SoftwareBuildRuntimeSummary     `json:"runtime,omitempty"`
+	Stages          []SoftwareBuildStageStatusAPI    `json:"stages,omitempty"`
+	Compliance      *SoftwareBuildComplianceSummary  `json:"compliance,omitempty"`
+}
+
+// SoftwareBuildListItem represents a software build in the list API.
+type SoftwareBuildListItem struct {
+	Name      string `json:"name"`
+	Phase     string `json:"phase"`
+	Image     string `json:"image,omitempty"`
+	Source    string `json:"source,omitempty"`
+	CreatedAt string `json:"createdAt"`
+}

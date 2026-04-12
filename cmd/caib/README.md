@@ -442,6 +442,92 @@ Supported locations:
 | "no bearer token found" | Not logged in | Run `oc login` or set `CAIB_TOKEN` |
 | Registry auth failure | Missing credentials | Run `podman login`, set `REGISTRY_USERNAME/REGISTRY_PASSWORD` env vars, or use `--registry-auth-file` |
 
+## Software Builds
+
+The `caib software` command group manages SoftwareBuild resources — firmware,
+MCU code, unit tests, or any toolchain that runs in a container.
+
+### List builds
+
+```bash
+caib software list
+```
+
+### Show build details
+
+```bash
+caib software show body-ecu-nucleo
+caib software show body-ecu-nucleo -o json
+caib software show body-ecu-nucleo -o yaml
+```
+
+### Trigger a build (remote)
+
+Build from the Git source defined in the CR:
+
+```bash
+caib software run body-ecu-nucleo
+caib software run body-ecu-nucleo --revision feature-branch
+```
+
+### Trigger a build (local)
+
+Build from your local workspace, bypassing Git:
+
+```bash
+caib software run body-ecu-nucleo --local
+caib software run body-ecu-nucleo --local --workspace ./my-project
+caib software run body-ecu-nucleo --local --image localhost/my-toolchain:latest
+```
+
+Local builds skip compliance by default. To force compliance:
+
+```bash
+caib software run body-ecu-nucleo --local --no-compliance=false
+```
+
+### Stream logs
+
+```bash
+caib software logs body-ecu-nucleo
+```
+
+### Delete a build
+
+```bash
+caib software delete body-ecu-nucleo
+```
+
+### Generate a CR (SRE / build engineer)
+
+```bash
+caib software create \
+  --name body-ecu-nucleo \
+  --source https://github.com/example/body-ecu \
+  --source-revision main \
+  --runtime-image ghcr.io/zephyrproject-rtos/ci-base:v0.27.4 \
+  --fetch "west init -l src && west update" \
+  --build "west build -b nucleo_h755zi_q src/app" \
+  --postbuild "cp build/zephyr/zephyr.bin /workspace/artifacts/"
+```
+
+Output the YAML, review it, commit to Git, apply via GitOps.
+
+### Build tiers
+
+| Tier | Source | Compliance | Use case |
+|------|--------|------------|----------|
+| Local | Working directory | Skipped | Developer inner loop |
+| Remote | Git (CR-defined) | Per OperatorConfig | Feature branch testing |
+| Official | Git (reviewed CR) | Mandatory | Release / CI |
+
+### Environment variables
+
+| Variable | Description |
+|----------|-------------|
+| `CAIB_SERVER` | Build API server URL |
+| `CAIB_TOKEN` | Bearer token for authentication |
+
 ## Version
 
 ```bash

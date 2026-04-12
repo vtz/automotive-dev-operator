@@ -1019,3 +1019,101 @@ func (c *Client) ShellWorkspace(ctx context.Context, name string) (*websocket.Co
 	}
 	return conn, nil
 }
+
+// ListSoftwareBuilds retrieves a list of all software builds from the API server.
+func (c *Client) ListSoftwareBuilds(ctx context.Context) ([]buildapi.SoftwareBuildListItem, error) {
+	var out []buildapi.SoftwareBuildListItem
+	if err := c.listJSON(ctx, c.resolve("/v1/software-builds"), "list software builds", &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// GetSoftwareBuild retrieves the status and details of a specific software build by name.
+func (c *Client) GetSoftwareBuild(ctx context.Context, name string) (*buildapi.SoftwareBuildResponse, error) {
+	endpoint := c.resolve(path.Join("/v1/software-builds", url.PathEscape(name)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	if c.authToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.authToken)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to close response body: %v\n", err)
+		}
+	}()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return nil, fmt.Errorf("get software build failed: %s: %s", resp.Status, string(b))
+	}
+	var out buildapi.SoftwareBuildResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// RunSoftwareBuild triggers a software build run for the named configuration.
+//
+//nolint:dupl // HTTP client methods share structural boilerplate by design
+func (c *Client) RunSoftwareBuild(ctx context.Context, name string, req buildapi.SoftwareBuildRunRequest) (*buildapi.SoftwareBuildResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	endpoint := c.resolve(path.Join("/v1/software-builds", url.PathEscape(name), "run"))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	if c.authToken != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+c.authToken)
+	}
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to close response body: %v\n", err)
+		}
+	}()
+	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return nil, fmt.Errorf("run software build failed: %s: %s", resp.Status, string(b))
+	}
+	var out buildapi.SoftwareBuildResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// DeleteSoftwareBuild deletes a software build by name.
+func (c *Client) DeleteSoftwareBuild(ctx context.Context, name string) error {
+	endpoint := c.resolve(path.Join("/v1/software-builds", url.PathEscape(name)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return err
+	}
+	if c.authToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.authToken)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return fmt.Errorf("delete software build failed: %s: %s", resp.Status, string(b))
+	}
+	return nil
+}

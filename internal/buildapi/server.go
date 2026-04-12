@@ -609,6 +609,16 @@ func (a *APIServer) createRouter() *gin.Engine {
 			}
 		}
 
+		softwareBuildsGroup := v1.Group("/software-builds")
+		softwareBuildsGroup.Use(a.authMiddleware())
+		{
+			softwareBuildsGroup.GET("", a.handleListSoftwareBuilds)
+			softwareBuildsGroup.GET("/:name", a.handleGetSoftwareBuild)
+			softwareBuildsGroup.POST("/:name/run", a.handleRunSoftwareBuild)
+			softwareBuildsGroup.GET("/:name/logs", a.handleStreamSoftwareBuildLogs)
+			softwareBuildsGroup.DELETE("/:name", a.handleDeleteSoftwareBuild)
+		}
+
 		a.registerWorkspaceRoutes(v1)
 
 		// Register catalog routes with authentication

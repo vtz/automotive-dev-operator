@@ -7,6 +7,7 @@ import (
 	"github.com/centos-automotive-suite/automotive-dev-operator/cmd/caib/image"
 	"github.com/centos-automotive-suite/automotive-dev-operator/cmd/caib/querycmd"
 	"github.com/centos-automotive-suite/automotive-dev-operator/cmd/caib/sealedcmd"
+	"github.com/centos-automotive-suite/automotive-dev-operator/cmd/caib/softwarecmd"
 	"github.com/centos-automotive-suite/automotive-dev-operator/cmd/caib/tokencmd"
 )
 
@@ -132,6 +133,7 @@ type handlerSet struct {
 	download *downloadcmd.Handler
 	flash    *flashcmd.Handler
 	sealed   *sealedcmd.Handler
+	software *softwarecmd.Handler
 	token    *tokencmd.Handler
 }
 
@@ -229,6 +231,12 @@ func (s runtimeState) newHandlers() handlerSet {
 			InsecureSkipTLS:         s.InsecureSkipTLS,
 			HandleError:             handleError,
 		}),
+		software: softwarecmd.NewHandler(softwarecmd.HandlerOptions{
+			ServerURL:       s.ServerURL,
+			AuthToken:       s.AuthToken,
+			InsecureSkipTLS: s.InsecureSkipTLS,
+			HandleError:     handleError,
+		}),
 		token: tokencmd.NewHandler(tokencmd.Options{
 			ServerURL:       s.ServerURL,
 			AuthToken:       s.AuthToken,
@@ -305,5 +313,16 @@ func (s runtimeState) imageOptions(h handlerSet) image.Options {
 		SealedInputRef:          s.SealedInputRef,
 		SealedOutputRef:         s.SealedOutputRef,
 		SealedSignedRef:         s.SealedSignedRef,
+	}
+}
+
+func (s runtimeState) softwareOptions(h handlerSet) softwarecmd.Options {
+	return softwarecmd.Options{
+		RunList:   h.software.RunList,
+		RunShow:   h.software.RunShow,
+		RunBuild:  h.software.RunBuild,
+		RunLogs:   h.software.RunLogs,
+		RunDelete: h.software.RunDelete,
+		RunCreate: h.software.RunCreate,
 	}
 }

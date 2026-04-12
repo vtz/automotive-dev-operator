@@ -5,6 +5,7 @@ import (
 	"github.com/centos-automotive-suite/automotive-dev-operator/cmd/caib/catalog"
 	"github.com/centos-automotive-suite/automotive-dev-operator/cmd/caib/container"
 	"github.com/centos-automotive-suite/automotive-dev-operator/cmd/caib/image"
+	"github.com/centos-automotive-suite/automotive-dev-operator/cmd/caib/softwarecmd"
 	"github.com/centos-automotive-suite/automotive-dev-operator/cmd/caib/workspace"
 	"github.com/spf13/cobra"
 )
@@ -30,6 +31,7 @@ func newRootCmd() *cobra.Command {
 
 	rootCmd.AddCommand(
 		image.NewImageCmd(state.imageOptions(handlers)),
+		softwarecmd.NewSoftwareCmd(state.softwareOptions(handlers)),
 		newLoginCmd(),
 		container.NewContainerCmd(),
 		catalog.NewCatalogCmd(),
