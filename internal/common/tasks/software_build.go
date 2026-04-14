@@ -210,7 +210,7 @@ func buildPipelineRunParams(sb *automotivev1alpha1.SoftwareBuild, globalImage st
 		{Name: "containerImage", Value: tektonv1.ParamValue{Type: tektonv1.ParamTypeString, StringVal: globalImage}},
 	}
 	for _, s := range stages {
-		stageImage := "$(params.containerImage)"
+		stageImage := globalImage
 		if s.image != "" {
 			stageImage = s.image
 		}

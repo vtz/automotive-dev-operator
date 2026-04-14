@@ -1096,6 +1096,29 @@ func (c *Client) RunSoftwareBuild(ctx context.Context, name string, req buildapi
 	return &out, nil
 }
 
+// StreamSoftwareBuildLogs opens a streaming connection to the software build log endpoint
+// and returns a ReadCloser. The caller is responsible for closing it.
+func (c *Client) StreamSoftwareBuildLogs(ctx context.Context, name string) (io.ReadCloser, error) {
+	endpoint := c.resolve(path.Join("/v1/software-builds", url.PathEscape(name), "logs"))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	if c.authToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.authToken)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		_ = resp.Body.Close()
+		return nil, fmt.Errorf("stream software build logs failed: %s: %s", resp.Status, string(b))
+	}
+	return resp.Body, nil
+}
+
 // DeleteSoftwareBuild deletes a software build by name.
 func (c *Client) DeleteSoftwareBuild(ctx context.Context, name string) error {
 	endpoint := c.resolve(path.Join("/v1/software-builds", url.PathEscape(name)))

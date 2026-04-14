@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -234,9 +235,6 @@ func (h *Handler) RunBuild(cmd *cobra.Command, args []string) {
 
 // RunLogs handles `caib software logs`.
 func (h *Handler) RunLogs(cmd *cobra.Command, args []string) {
-	fmt.Fprintf(os.Stderr, "Log streaming not yet implemented for software builds.\n")
-	fmt.Fprintf(os.Stderr, "Use: kubectl logs -l tekton.dev/pipelineRun=<run-name> -f\n")
-
 	h.mergeTokenFromCmd(cmd)
 	serverURL := h.resolveServerURL(cmd)
 	if serverURL == "" {
@@ -249,19 +247,22 @@ func (h *Handler) RunLogs(cmd *cobra.Command, args []string) {
 	}
 
 	ctx := context.Background()
-	var resp *buildapi.SoftwareBuildResponse
+	var stream io.ReadCloser
 	err := common.ExecuteWithReauth(serverURL, h.opts.AuthToken, h.insecureTLS(), func(api *buildapiclient.Client) error {
-		var getErr error
-		resp, getErr = api.GetSoftwareBuild(ctx, args[0])
-		return getErr
+		var logErr error
+		stream, logErr = api.StreamSoftwareBuildLogs(ctx, args[0])
+		return logErr
 	})
 	if err != nil {
 		h.handleError(err)
 		return
 	}
+	defer stream.Close()
 
-	if resp.PipelineRunName != "" {
-		fmt.Fprintf(os.Stderr, "PipelineRun: %s\n", resp.PipelineRunName)
+	if _, copyErr := io.Copy(os.Stdout, stream); copyErr != nil {
+		if !strings.Contains(copyErr.Error(), "closed") {
+			fmt.Fprintf(os.Stderr, "\nLog stream ended: %v\n", copyErr)
+		}
 	}
 }
 
